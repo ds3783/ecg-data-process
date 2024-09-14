@@ -23,6 +23,7 @@
   "devDependencies": {
     "chai": "^5.1.1",
     "esm": "^3.2.25",
-    "mocha": "^10.7.3"
+    "mocha": "^10.7.3",
+    "uglify-js": "^3.19.3"
   }
 }

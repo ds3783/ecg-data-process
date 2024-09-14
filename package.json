@@ -1,0 +1,28 @@
+{
+  "name": "ecg-data-processor",
+  "version": "1.0.0",
+  "description": "A JavaScript library for processing and analyzing ECG data, including noise filtering, PQRST wave detection, and clinical indicator calculations.",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ds3783/ecg-data-process.git"
+  },
+  "author": "Ds.3783 <ds3783@gmail.com>",
+  "license": "GPL-3.0",
+  "keywords": [
+    "ECG",
+    "data processing",
+    "ECG analysis",
+    "medical",
+    "PQRST",
+    "heart rate"
+  ],
+  "scripts": {
+    "test": "mocha --require esm"
+  },
+  "devDependencies": {
+    "chai": "^5.1.1",
+    "esm": "^3.2.25",
+    "mocha": "^10.7.3"
+  }
+}

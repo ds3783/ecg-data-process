@@ -1,6 +1,6 @@
-# ECG Data Processing Library
+# ECG Data Processor
 
-**ECG Data Processing Library** is a JavaScript library designed for analyzing and processing ECG data. It provides tools for filtering noise, detecting key PQRST waveforms, and calculating clinical indicators such as PR interval, QRS duration, and heart rate.
+**ECG Data Processor ** is a JavaScript library designed for analyzing and processing ECG data. It provides tools for filtering noise, detecting key PQRST waveforms, and calculating clinical indicators such as PR interval, QRS duration, and heart rate.
 
 ## Features
 - Noise filtering (high-pass, low-pass, and notch filters)
@@ -146,7 +146,7 @@ all options are optional, you can use the default values if you don't want to ch
     - `LOWPASS`: A low-pass filter to smooth out high-frequency noise (default).
     - `MEDIAN`: A median filter for removing noise while preserving sharp edges.
     - `MEAN`: A mean filter for averaging nearby values.
-- 
+
 - **useDirectData**: `boolean` (default: `false`)  
   If `true`, the `process` function will treat `ecgData` as `[[time_in_seconds/frequency, voltage], ...]` and will not aggregate any data.
 
@@ -169,7 +169,10 @@ all options are optional, you can use the default values if you don't want to ch
 
 # Changelog
 
-## [1.1.0] - 2024-09-XX
+## [1.1.1] - 2024-09-16
+- improve the documentation.
+
+## [1.1.0] - 2024-09-16
 
 ### Added
 - **useDirectData** option: When set to `true`, the `process` function uses the ECG data directly as `[[time_in_seconds/frequency, voltage], ...]` without aggregation.

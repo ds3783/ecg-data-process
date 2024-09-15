@@ -75,7 +75,12 @@
 function ecg_data_process_v1(ecgData, frequency, options) {
     function resultConstructor(ecgData, frequency, options) {
         this._option = options;
-        this._data = ecgData.map((val, idx) => [idx * 1000 / frequency, val]);
+        if (options.useDirectData) {
+            this._data = ecgData;
+        } else {
+            this._data = ecgData.map((val, idx) => [idx * 1000 / frequency, val]);
+        }
+
         this._frequency = frequency;
         this._result = {
             summary: {
@@ -609,7 +614,7 @@ function ecg_data_process_v1(ecgData, frequency, options) {
         }
     }
 
-    function getSummary(beats, frequency = 100) {
+    function getSummary(beats, frequency = 100, options) {
         let summary = {
             hr: null,
             st: 0,
@@ -621,6 +626,10 @@ function ecg_data_process_v1(ecgData, frequency, options) {
             let duration = beats[beats.length - 1].r.peak_time - beats[0].r.peak_time;
             if (duration > 0) {
                 summary.hr_duration = duration;
+                if (options.useDirectData) {
+                    //when use direct data, the duration is in 1/frequency second
+                    summary.hr_duration = duration * (1000 / frequency);
+                }
                 summary.hr = Math.round(60 / (duration / 1000 / (beats.length - 1)));
             }
             summary.hr_beats = beats.length - 1;
@@ -647,8 +656,15 @@ function ecg_data_process_v1(ecgData, frequency, options) {
                 }
                 if (stValid) {
                     validBeats++
-                    pr.push((beat.r.start_time - beat.p.start_time));
-                    qrs.push((beat.s.end_time - beat.q.start_time));
+                    let pr_time = (beat.r.start_time - beat.p.start_time);
+                    let qrs_time = (beat.s.end_time - beat.q.start_time);
+                    if (options.useDirectData) {
+                        //when use direct data, the duration is in 1/frequency second
+                        pr_time = pr_time * 1000 / frequency
+                        qrs_time = qrs_time * 1000 / frequency
+                    }
+                    pr.push(pr_time);
+                    qrs.push(qrs_time);
                 } else {
                     beat.valid = false;
                 }
@@ -669,7 +685,7 @@ function ecg_data_process_v1(ecgData, frequency, options) {
         return summary;
     }
 
-    function getSummaryFromSegments(segments, frequency = 100) {
+    function getSummaryFromSegments(segments) {
         let summary = {
             hr: null,
             st: 0,
@@ -722,11 +738,14 @@ function ecg_data_process_v1(ecgData, frequency, options) {
             windowSize: 20
         },
         throughMinDistance: 10,
+        useDirectData: false,
     }, options || {});
     frequency = frequency || 100;
     //declare resultObj
     let aggregationRatio = options.aggregation || Math.floor(frequency / 100);
-    ecgData = aggregation(ecgData, aggregationRatio);
+    if (!options.useDirectData) {
+        ecgData = aggregation(ecgData, aggregationRatio);
+    }
     frequency = frequency / aggregationRatio;
     let resultObj = new resultConstructor(ecgData, frequency, options);
     ecgData = resultObj._data;
@@ -745,7 +764,7 @@ function ecg_data_process_v1(ecgData, frequency, options) {
         //test beats is valid
         testBeats(beats);
         //get summary of beats
-        let summary = getSummary(beats, frequency);
+        let summary = getSummary(beats, frequency, options);
         resultObj._result.segments.push({
             start_time: seg[0][0],
             end_time: seg[seg.length - 1][0],
@@ -755,7 +774,7 @@ function ecg_data_process_v1(ecgData, frequency, options) {
 
     }
     //get summary of all segments
-    resultObj._result.summary = getSummaryFromSegments(resultObj._result.segments, frequency);
+    resultObj._result.summary = getSummaryFromSegments(resultObj._result.segments);
     return resultObj;
 }
 
@@ -770,5 +789,15 @@ try {
     };
 } catch (e) {
     console.error("module.exports is not defined");
+
+    var global = global || window;
+    global.ecg_data_process = {
+        filters: {
+            'LOWPASS': 'LOWPASS',
+            'MEAN': 'MEAN',
+            'MEDIAN': 'MEDIAN'
+        },
+        process: ecg_data_process_v1
+    }
 }
 

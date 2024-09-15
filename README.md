@@ -26,8 +26,7 @@ const processedData = ecgProcessor.process(ecgData);
 console.log(processedData);
 ```
 
-## Usage 
-### Example
+## Example 
 The following example demonstrates how to use the library to process ECG data:
 1. Prepare your ECG voltage(usually between -1.5mV ~ 1.5mV) data in a text file (e.g., ecg.txt), where each line represents a single data point (a numeric value). For example:
 ```text
@@ -120,6 +119,10 @@ The processed result will also provide the following beats:
 }
 ```
 
+## More Usage
+
+For additional usage examples, you can refer to the test code in the `/test` directory.
+
 ### Options Description
 all options are optional, you can use the default values if you don't want to change them.
 
@@ -143,6 +146,10 @@ all options are optional, you can use the default values if you don't want to ch
     - `LOWPASS`: A low-pass filter to smooth out high-frequency noise (default).
     - `MEDIAN`: A median filter for removing noise while preserving sharp edges.
     - `MEAN`: A mean filter for averaging nearby values.
+- 
+- **useDirectData**: `boolean` (default: `false`)  
+  If `true`, the `process` function will treat `ecgData` as `[[time_in_seconds/frequency, voltage], ...]` and will not aggregate any data.
+
 
   Users can select a filter by importing the available filters:
   ```javascript
@@ -160,6 +167,36 @@ all options are optional, you can use the default values if you don't want to ch
 - **throughMinDistance**: `number` (default: `10`)
     - The minimum distance (in data points) between consecutive troughs in the ECG waveform. This ensures that noise or small variations do not cause false detection of troughs.
 
+# Changelog
+
+## [1.1.0] - 2024-09-XX
+
+### Added
+- **useDirectData** option: When set to `true`, the `process` function uses the ECG data directly as `[[time_in_seconds/frequency, voltage], ...]` without aggregation.
+- Added test file **`use_direct_data.test.mjs`** to validate the functionality of the `useDirectData` option.
+- Fixed some bugs.
+
+## [1.0.0] - 2024-09-15
+
+### Added
+- Initial release of the **ECG Data Processor** library.
+- Added support for ECG data processing, including:
+  - **Noise filtering**.
+  - **PQRST wave detection**.
+  - **Clinical indicator calculations** (heart rate, PR, QRS, etc.).
+- Introduced several configuration options:
+  - **debug**: Toggle debug mode.
+  - **aggregation**: Controls data aggregation and noise blocking.
+  - **rPeakSlopeThreshold**: Threshold for R peak detection.
+  - **rPeakMinDistance**: Minimum distance between R peaks.
+  - **smoothWindowSize**: Window size for data smoothing.
+  - **baselineFilter**: Enum for baseline filtering methods (`LOWPASS`, `MEDIAN`, `MEAN`).
+  - **baselineFilterOptions**: Options for baseline filtering, including `alpha` and `windowSize`.
+  - **throughMinDistance**: Minimum distance between through points.
+
+### Tests
+- Added test cases in `/test/default_with_noise.test.js` for verifying ECG data processing.
+- 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 

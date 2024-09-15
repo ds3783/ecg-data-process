@@ -147,10 +147,6 @@ all options are optional, you can use the default values if you don't want to ch
     - `MEDIAN`: A median filter for removing noise while preserving sharp edges.
     - `MEAN`: A mean filter for averaging nearby values.
 
-- **useDirectData**: `boolean` (default: `false`)  
-  If `true`, the `process` function will treat `ecgData` as `[[time_in_seconds/frequency, voltage], ...]` and will not aggregate any data.
-
-
   Users can select a filter by importing the available filters:
   ```javascript
   import { filters } from 'ecg-data-process';
@@ -167,9 +163,13 @@ all options are optional, you can use the default values if you don't want to ch
 - **throughMinDistance**: `number` (default: `10`)
     - The minimum distance (in data points) between consecutive troughs in the ECG waveform. This ensures that noise or small variations do not cause false detection of troughs.
 
+- **useDirectData**: `boolean` (default: `false`)  
+  If `true`, the `process` function will treat `ecgData` as `[[time_in_seconds/frequency, voltage], ...]` and will not aggregate any data.
+
+
 # Changelog
 
-## [1.1.1] - 2024-09-16
+## [1.1.2] - 2024-09-16
 - improve the documentation.
 
 ## [1.1.0] - 2024-09-16

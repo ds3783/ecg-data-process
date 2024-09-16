@@ -170,6 +170,9 @@ all options are optional, you can use the default values if you don't want to ch
 # Changelog
 
 ## [1.1.2] - 2024-09-16
+- Bug fix: Potential array index out of bounds error. 
+
+## [1.1.2] - 2024-09-16
 - improve the documentation.
 
 ## [1.1.0] - 2024-09-16

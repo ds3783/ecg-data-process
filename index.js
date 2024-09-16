@@ -452,7 +452,7 @@ function ecg_data_process_v1(ecgData, frequency, options) {
                 throw new Error('Invalid baseline filter', typeof options.baselineFilter, options.baselineFilter, 'is not a valid filter function');
             }
             beat._baseline = baseline;
-            baselineLeft = baseline.slice(0, rPeakIndex);
+            baselineLeft = baseline.slice(0, rPeakIndex + 1);
             baselineRight = baseline.slice(rPeakIndex);
             // console.log('baseVoltageLeft:', baselineLeft);
             // console.log('smoothLeft:', smoothLeft, leftTroughs, qPeakIndex);

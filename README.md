@@ -169,7 +169,10 @@ all options are optional, you can use the default values if you don't want to ch
 
 # Changelog
 
-## [1.1.2] - 2024-09-16
+## [1.1.4] - 2024-09-17
+- Improve algorithm accuracy.
+
+## [1.1.3] - 2024-09-16
 - Bug fix: Potential array index out of bounds error. 
 
 ## [1.1.2] - 2024-09-16

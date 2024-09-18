@@ -686,7 +686,10 @@ function ecg_data_process_v1(ecgData, frequency, options) {
                 if (beat.s.end_time > 0) {
                     let jPointIdx = beat._data.findIndex((val) => val[0] === beat.s.end_time);
                     let tStartIdx = beat._data.findIndex((val) => val[0] === beat.t.start_time);
-                    let jPointVoltage = beat._baseline[jPointIdx][1];
+                    let jPointVoltage = beat._data[jPointIdx][1];
+                    if (tStartIdx > jPointIdx + 1 && beat._data[jPointIdx + 1] && beat._data[jPointIdx + 1][1] > jPointVoltage) {
+                        jPointVoltage = beat._data[jPointIdx + 1][1];
+                    }
                     let _80msAfterJPoint = Math.min(jPointIdx + Math.floor(0.08 * frequency), tStartIdx);
                     if (beat._data[_80msAfterJPoint]) {
                         let _80msVoltage = beat._data[_80msAfterJPoint][1];

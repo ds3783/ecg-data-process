@@ -1,6 +1,6 @@
 # ECG Data Processor
 
-**ECG Data Processor ** is a JavaScript library designed for analyzing and processing ECG data. It provides tools for filtering noise, detecting key PQRST waveforms, and calculating clinical indicators such as PR interval, QRS duration, and heart rate.
+**ECG Data Processor** is a JavaScript library designed for analyzing and processing ECG data. It provides tools for filtering noise, detecting key PQRST waveforms, and calculating clinical indicators such as PR interval, QRS duration, and heart rate.
 
 ## Features
 - Noise filtering (high-pass, low-pass, and notch filters)
@@ -123,7 +123,7 @@ The processed result will also provide the following beats:
 
 For additional usage examples, you can refer to the test code in the `/test` directory.
 
-### Options Description
+## Options Description
 all options are optional, you can use the default values if you don't want to change them.
 
 - **debug**: `boolean` (default: `false`)
@@ -168,6 +168,9 @@ all options are optional, you can use the default values if you don't want to ch
 
 
 # Changelog
+
+## [1.1.5] - 2024-09-18
+- Improve ST Voltage accuracy.
 
 ## [1.1.4] - 2024-09-17
 - Improve algorithm accuracy.

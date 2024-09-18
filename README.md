@@ -169,7 +169,7 @@ all options are optional, you can use the default values if you don't want to ch
 
 # Changelog
 
-## [1.1.5] - 2024-09-18
+## [1.1.6] - 2024-09-18
 - Improve ST Voltage accuracy.
 
 ## [1.1.4] - 2024-09-17

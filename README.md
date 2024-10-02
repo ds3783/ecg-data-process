@@ -166,8 +166,27 @@ all options are optional, you can use the default values if you don't want to ch
 - **useDirectData**: `boolean` (default: `false`)  
   If `true`, the `process` function will treat `ecgData` as `[[time_in_seconds/frequency, voltage], ...]` and will not aggregate any data.
 
+- **minPWaveHeight**: `number` (default: `0`)  
+  This option sets the minimum height threshold for detecting P-waves in the ECG signal. It is used to filter out noise and prevent false identification of P-waves that may be caused by low-amplitude noise. If the detected P-wave's amplitude is below this threshold, it will be ignored in the analysis.
+
+- **minTWaveHeight**: `number` (default: `0.1`)  
+  This option sets the minimum height threshold for detecting T-waves in the ECG signal. Similar to the `minPWaveHeight`, it is used to filter out noise and prevent false identification of T-waves with low amplitude. Only T-waves that meet or exceed this height will be considered valid in the analysis.
+
 
 # Changelog
+
+## [1.2.0] - 2024-10-02
+
+### Major Changes
+- **Rewrote Algorithm for QRS Complex Detection**:
+  - Improved accuracy in detecting the QRS complex with enhanced accuracy, especially in noisy datasets.
+
+- **Added New Options for Wave Identification**:
+  - **`minPWaveHeight`**: New option introduced to filter out noise and improve the accuracy of P-wave identification by setting a minimum height threshold.
+  - **`minTWaveHeight`**: New option introduced to filter out noise and improve the accuracy of T-wave identification by setting a minimum height threshold.
+
+### Bug Fixes
+- Fixed various bugs related to wave detection and noise filtering.
 
 ## [1.1.6] - 2024-09-18
 - Improve ST Voltage accuracy.

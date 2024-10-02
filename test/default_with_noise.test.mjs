@@ -17,7 +17,9 @@ describe('ECG Data Processor Tests', function () {
         const ecgData = fileContent.split('\n').map(line => {
             return line.trim() * 1;
         });
-        const processedData = process(ecgData,511.547); // Example function
+        const processedData = process(ecgData,511.547,{
+            aggregation: 500,
+        }); // Example function
 
         expect(processedData).to.be.an('object');
         let processedResult=processedData.getResult();

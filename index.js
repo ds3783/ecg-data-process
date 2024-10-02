@@ -267,7 +267,7 @@ function ecg_data_process_v1(ecgData, frequency, options) {
     }
 
     // Function to find local minima (troughs)
-    function findTroughs(ecgData, direction = -1, minDistance = 10) {
+    /*function findTroughs(ecgData, direction = -1, minDistance = 10) {
         let troughs = [];
 
         if (direction < 0) {
@@ -299,6 +299,77 @@ function ecg_data_process_v1(ecgData, frequency, options) {
         }
 
         return troughs;
+    }*/
+
+    function findPeaks(ecgData, direction = -1, minDistance = 10, minPeakHeight = 0.1) {
+        let peaks = [];
+        let through = null;
+
+
+        if (direction < 0) {
+            // Loop through the ECG data and find local minima
+            for (let i = ecgData.length - 2; i >= 1; i--) {
+                if (typeof through !== 'number') {
+                    through = ecgData[i][1];
+                } else {
+                    through = Math.min(through, ecgData[i][1]);
+                }
+                if (ecgData[i][1] > ecgData[i + 1][1]) {
+                    let j = i - 1;
+                    while (j >= 0 && ecgData[j][1] === ecgData[i][1]) {
+                        j--;
+                    }
+                    if (j >= 0 && ecgData[j][1] < ecgData[i][1]) {
+                        let peak = Math.round((i + j) / 2);
+                        let peakValue = ecgData[peak][1];
+                        if (peakValue - through >= minPeakHeight) {
+                            if (peaks.length > 0) {
+                                if (Math.abs(peak - peaks[peaks.length - 1]) > minDistance) {
+                                    peaks.push(peak); // Store the index of the peak
+                                    through = null;
+                                }
+                            } else {
+                                peaks.push(peak); // Store the index of the peak
+                                through = null;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Loop through the ECG data and find local minima
+            for (let i = 1; i < ecgData.length - 1; i++) {
+                if (typeof through !== 'number') {
+                    through = ecgData[i][1];
+                } else {
+                    through = Math.min(through, ecgData[i][1]);
+                }
+                if (ecgData[i][1] > ecgData[i - 1][1]) {
+                    let j = i + 1;
+                    while (j < ecgData.length && ecgData[j][1] === ecgData[i][1]) {
+                        j++;
+                    }
+                    if (j < ecgData.length && ecgData[j][1] < ecgData[i][1]) {
+                        let peak = Math.round((i + j) / 2);
+                        let peakValue = ecgData[peak][1];
+                        if (peakValue - through >= minPeakHeight) {
+                            if (peaks.length > 0) {
+                                if (Math.abs(peak - peaks[peaks.length - 1]) > minDistance) {
+                                    peaks.push(peak); // Store the index of the peak
+                                    through = null;
+                                }
+                            } else {
+                                peaks.push(peak); // Store the index of the peak
+                                through = null;
+                            }
+
+                        }
+                    }
+                }
+            }
+        }
+
+        return peaks;
     }
 
     function calculateSlope(signal) {
@@ -340,55 +411,104 @@ function ecg_data_process_v1(ecgData, frequency, options) {
     }
 
 
-    function getBeats(rPeaks, seg, options) {
+    function getBeats(rPeaks, seg, frequency, options) {
         let beats = [];
+        let lastBeat = null;
         for (let i = 0; i < rPeaks.length; i++) {
             let peak = rPeaks[i];
             let start = i === 0 ? 0 : rPeaks[i - 1][0];
+            if (lastBeat && lastBeat.t.end_time > 0) {
+                start = lastBeat.t.end_time;
+            }
             let end = rPeaks[i + 1] ? rPeaks[i + 1][0] : -1;
             let left = seg.filter((val) => val[0] >= start && val[0] < peak[0]);
             let right = seg.filter((val) => val[0] > peak[0] && ((end > 0 && val[0] <= end) || end < 0));
-            //cut the left from second trough value 
-            let smoothLeft = smoothSignal(left, options.smoothWindowSize);
-            let leftTroughs = findTroughs(smoothLeft, -1, options.throughMinDistance);
+            let leftSlope = calculateSlope(left);
+            let rightSlope = calculateSlope(right);
 
-            let minLeftItemIndex = 0;
-            if (leftTroughs.length >= 2) {
-                minLeftItemIndex = leftTroughs[1];
+            // Get qrs complex
+            //iterate left arm to find q wave start
+            // decide by the slope
+            let qWaveStartIndex = -1;
+            for (let j = leftSlope.length - 1; j >= 0; j--) {
+                if (Math.abs(leftSlope[j]) * frequency < 2.5) {
+                    //45 degree
+                    qWaveStartIndex = j;
+                    break;
+                }
+            }
+            // console.log('qWaveStartIndex:', qWaveStartIndex);
+            let leftStartIdx = 0;
+            let smoothLeft = smoothSignal(left, options.smoothWindowSize);
+            let leftPeaks = findPeaks(smoothLeft, 1, options.throughMinDistance, options.minPWaveHeight);
+            if (leftPeaks.length > 0) {
+                for (let j = leftPeaks[0]; j > 0; j--) {
+                    let slope = (smoothLeft[j][1] - smoothLeft[j - 1][1]) * frequency;
+                    // console.log('leftSlope:', j, slope, left[j + 1][1], left[j][1]);
+                    if (slope >= -0.05 && Math.abs(slope) < 2.5) {
+                        leftStartIdx = j;
+                        break;
+                    }
+                }
             }
 
-            if (minLeftItemIndex > 0) {
-                left = left.slice(minLeftItemIndex);
+
+            if (leftStartIdx > 0) {
+                left = left.slice(leftStartIdx);
+                //adjust qWaveStartIndex because of the cut
+                qWaveStartIndex = qWaveStartIndex - leftStartIdx;
             }
 
             //cut the right from peak to second trough value
             let smoothRight = smoothSignal(right, options.smoothWindowSize);
+            let rightEndIdx = -1;
+            let rWaveEndIdx = -1;
+            for (let j = 0; j < rightSlope.length; j++) {
+                // console.log('rightSlope1:', j, rightSlope[j], Math.abs(rightSlope[j]) * frequency);
+                if (Math.abs(rightSlope[j]) * frequency < 2.5) {
+                    //45 degree
+                    rWaveEndIdx = j;
+                    break;
+                }
+            }
+            let rightPeaks = findPeaks(smoothRight, 1, options.throughMinDistance, options.minTWaveHeight);
+            // console.log('rWavePeak:', i, options.throughMinDistance);
+            // console.log('rightPeaks:', rightPeaks, right);
+            let tWaveEndTime = -1;
+            if (rightPeaks.length > 0) {
+                let peakIdx = 0;
+                while (rightPeaks[peakIdx] && rightPeaks[peakIdx] < rWaveEndIdx) {
+                    peakIdx++;
+                }
+                for (let j = rightPeaks[peakIdx]; j < right.length - 1; j++) {
+                    let slope = (smoothRight[j + 1][1] - smoothRight[j][1]) * frequency;
+                    // console.log('rightSlope:', j, slope, smoothRight[j + 1][1], smoothRight[j][1]);
+                    if (slope >= -0.05 && Math.abs(slope) < 2.5) {
+                        rightEndIdx = j;
+                        tWaveEndTime = right[j][0];
+                        break;
+                    }
+                }
+            }
+            if (rightEndIdx > 0) {
+                right = right.slice(0, rightEndIdx);
+            } else {
+                tWaveEndTime = right[right.length - 1][0];
+            }
 
-            let minRightItemIndex = 0;
-            let rightTroughs = findTroughs(smoothRight, 1, options.throughMinDistance);
-            // console.log('rightTroughs', smoothRight, rightTroughs);
-            if (rightTroughs.length >= 2) {
-                minRightItemIndex = rightTroughs[1];
-            }
-            if (minRightItemIndex > 0) {
-                right = right.slice(0, minRightItemIndex + 1);
-                // console.log('smoothRight', smoothRight, right);
-            }
             let beat = {
                 _data: [].concat(left || [], [peak], right || []),
-                _cut_start: minLeftItemIndex > 0,
-                _cut_end: minRightItemIndex > 0,
                 valid: false,
                 start_time: (left && left.length) ? left[0][0] : null,
                 end_time: right.length > 0 ? right[right.length - 1][0] : null,
                 p: {
-                    start_time: 0,
+                    start_time: left.length > 0 ? left[0][0] : 0,
                     end_time: 0,
                     peak_time: 0,
                     peak_voltage: 0
                 },
                 q: {
-                    start_time: 0,
+                    start_time: qWaveStartIndex > 0 ? left[qWaveStartIndex-1][0] : 0,
                     end_time: 0,
                     peak_time: 0,
                     peak_voltage: 0
@@ -401,20 +521,22 @@ function ecg_data_process_v1(ecgData, frequency, options) {
                 },
                 s: {
                     start_time: 0,
-                    end_time: 0,
+                    end_time:( rWaveEndIdx >= 0&& right[rWaveEndIdx+1]) ? right[rWaveEndIdx+1][0] : 0,
                     peak_time: 0,
                     peak_voltage: 0
                 },
                 t: {
                     start_time: 0,
-                    end_time: 0,
+                    end_time: tWaveEndTime >= 0 ? tWaveEndTime : 0,
                     peak_time: 0,
                     peak_voltage: 0
                 }
             };
 
             beats.push(beat);
-            /* try {
+            lastBeat = beat;
+            /*
+             try {
                  
              } catch (e) {
                  console.error('error:', e, minLeftItemIndex, left, peak, right);
@@ -434,13 +556,30 @@ function ecg_data_process_v1(ecgData, frequency, options) {
                 extendedRawData.push(rawData[rawData.length - 1]);
             }
             let smooth = smoothSignal(extendedRawData, options.smoothWindowSize);
-            let baseline;
+            let lastVal = null;
+            //baseline ignore qrs complex
+            let baseData = smooth.map((val) => {
+                if (val[0] >= beat.q.start_time && val[0] <= beat.s.end_time) {
+                    return [val[0], lastVal];
+                } else {
+                    if (typeof lastVal !== 'number') {
+                        lastVal = val[1];
+                    }
+                    return val;
+                }
+
+            });
+            let baseline,
+                baselineWithoutQRS;
             if (options.baselineFilter === 'LOWPASS') {
-                baseline = lowPassFilter(smoothSignal(extendedRawData, options.smoothWindowSize), options.baselineFilterOptions?.alpha);
+                baselineWithoutQRS = lowPassFilter(baseData, options.baselineFilterOptions?.alpha);
+                baseline = lowPassFilter(smooth, options.baselineFilterOptions?.alpha);
             } else if (options.baselineFilter === 'MEAN') {
-                baseline = meanFilter(smoothSignal(extendedRawData, options.smoothWindowSize), options.baselineFilterOptions?.windowSize);
+                baselineWithoutQRS = meanFilter(baseData, options.baselineFilterOptions?.windowSize);
+                baseline = meanFilter(smooth, options.baselineFilterOptions?.windowSize);
             } else if (options.baselineFilter === 'MEDIAN') {
-                baseline = medianFilter(smoothSignal(extendedRawData, options.smoothWindowSize), options.baselineFilterOptions?.windowSize);
+                baselineWithoutQRS = medianFilter(baseData, options.baselineFilterOptions?.windowSize);
+                baseline = medianFilter(smooth, options.baselineFilterOptions?.windowSize);
             } else {
                 throw new Error('Invalid baseline filter', typeof options.baselineFilter, options.baselineFilter, 'is not a valid filter function');
             }
@@ -449,8 +588,11 @@ function ecg_data_process_v1(ecgData, frequency, options) {
             smooth.splice(smooth.length - extension, extension);
             baseline.splice(0, extension);
             baseline.splice(baseline.length - extension, extension);
+            baselineWithoutQRS.splice(0, extension);
+            baselineWithoutQRS.splice(baselineWithoutQRS.length - extension, extension);
 
             beat._baseline = baseline;
+            beat._baselineWithoutQRS = baselineWithoutQRS;
 
 
             let rPeakIndex = rawData.findIndex((val) => val[0] === beat.r.peak_time);
@@ -458,25 +600,20 @@ function ecg_data_process_v1(ecgData, frequency, options) {
             let right = rawData.slice(rPeakIndex);
             let smoothLeft = smooth.slice(0, rPeakIndex + 1)
             let smoothRight = smooth.slice(rPeakIndex);
-            let slope = calculateSlope(smooth);
-            let slopeLeft = slope.slice(0, rPeakIndex + 1);
-            let slopeRight = slope.slice(rPeakIndex);
-            let leftTroughs = findTroughs(smoothLeft, -1, options.throughMinDistance);
-            let rightTroughs = findTroughs(smoothRight, 1, options.throughMinDistance);
-            let qPeakIndex = null,
-                sPeakIndex = null;
-            if (leftTroughs.length > 0) {
-                qPeakIndex = leftTroughs[0];
-            }
-            if (rightTroughs.length > 0) {
-                sPeakIndex = rightTroughs[0];
-            }
+            let qWaveStartIndex = left.findIndex((val) => val[0] === beat.q.start_time);
+            let sWaveEndIndex = right.findIndex((val) => val[0] === beat.s.end_time);
+
             //get baseline voltage
             let baselineLeft = [];
             let baselineRight = [];
+            let baselineWithoutQRSLeft = [];
+            let baselineWithoutQRSRight = [];
 
             baselineLeft = baseline.slice(0, rPeakIndex + 1);
             baselineRight = baseline.slice(rPeakIndex);
+            baselineWithoutQRSLeft = baselineWithoutQRS.slice(0, rPeakIndex + 1);
+            baselineWithoutQRSRight = baselineWithoutQRS.slice(rPeakIndex);
+
             // console.log('baseVoltageLeft:', baselineLeft);
             // console.log('smoothLeft:', smoothLeft, leftTroughs, qPeakIndex);
             // console.log('baseVoltageRight:', baselineRight);
@@ -484,18 +621,19 @@ function ecg_data_process_v1(ecgData, frequency, options) {
             const threshold = 1 / 30;
             //get p wave
             let pWaveEndIndex = -1,
-                pWaveStartIndex = -1;
+                pWaveStartIndex = -1,
+                pWaveProbablyStartIndex = rawData.findIndex((val) => val[0] === beat.p.start_time);
 
-            for (let i = 0; i < qPeakIndex; i++) {
+            for (let i = pWaveProbablyStartIndex; i < qWaveStartIndex; i++) {
                 if (smoothLeft[i] && smoothLeft[i - 1] && smoothLeft[i][1] > smoothLeft[i - 1][1] && smoothLeft[i - 1][1] <= baselineLeft[i - 1][1] + threshold && smoothLeft[i][1] >= baselineLeft[i][1] + threshold) {
                     pWaveStartIndex = i;
                     break;
                 }
             }
-            for (let i = pWaveStartIndex; i < qPeakIndex; i++) {
+            for (let i = qWaveStartIndex; i > 0; i--) {
                 if (smoothLeft[i] && smoothLeft[i + 1] && smoothLeft[i][1] > smoothLeft[i + 1][1]) {
 
-                    if (smoothLeft[i][1] >= baselineLeft[i][1] && smoothLeft[i][1] <= baselineLeft[i][1] + threshold && smoothLeft[i + 1][1] <= baselineLeft[i + 1][1] + threshold) {
+                    if (smoothLeft[i][1] >= baselineLeft[i][1] && smoothLeft[i][1] <= baselineWithoutQRSLeft[i][1] + threshold && smoothLeft[i + 1][1] <= baselineWithoutQRSLeft[i + 1][1] + threshold) {
                         pWaveEndIndex = i;
                         break;
                     }
@@ -516,30 +654,12 @@ function ecg_data_process_v1(ecgData, frequency, options) {
             }
 
             //get q wave
-            let qWaveStartIndex = -1;
-            let qWavePeakIndex = qPeakIndex;
+            let qWavePeakIndex = -1;
             let qWaveEndIndex = -1;
             //iterate left find q wave end
             // let minSlope = Math.min.apply(null, slopeLeft);
-            for (let i = qPeakIndex; i >= 0; i--) {
-                if (smoothLeft[i] && smoothLeft[i + 1]) {
-                    if (smoothLeft[i][1] <= smoothLeft[i + 1][1]) {
-                        // console.log('pWaveEndIndex:', i, smoothLeft[i][1], smoothLeft[i + 1][1],'baseline:',baselineLeft[i][1],baselineLeft[i+1][1]);
-                        // console.log('qWaveStartIndex:', i, smoothLeft[i][1], smoothLeft[i + 1][1], 'slope:', slopeLeft[i], slopeLeft[i + 1], minSlope);
-                        // if (smoothLeft[i][1] >= baselineLeft[i][1] - threshold && smoothLeft[i + 1][1] <= baselineLeft[i + 1][1] - threshold) {
-                        if ((slopeLeft[i] < 0 && slopeLeft[i] > slopeLeft[i + 1]) || (smoothLeft[i][1] >= baselineLeft[i][1] - threshold && smoothLeft[i + 1][1] <= baselineLeft[i + 1][1] - threshold)) {
-                            //when slope getting sharp down,which means reverse direction should be ease down
-                            qWaveStartIndex = i;
-                            break;
-                        }
-                    } else {
-                        //meet peak
-                        qWaveStartIndex = i;
-                        break;
-                    }
-                }
-            }
-            for (let i = smoothLeft.length - 1; i >= qPeakIndex; i--) {
+
+            for (let i = smoothLeft.length - 1; i >= qWaveStartIndex; i--) {
                 if (smoothLeft[i] && smoothLeft[i + 1] && smoothLeft[i][1] < smoothLeft[i + 1][1]) {
                     // console.log('qWaveEndIndex:', i, smoothLeft[i][1], smoothLeft[i + 1][1], 'baseline:', baselineLeft[i][1], baselineLeft[i + 1][1]);
                     // console.log('qWaveEndIndex:', i, smoothLeft[i][1], smoothLeft[i + 1][1], 'baseline:', baselineLeft[i][1], baselineLeft[i + 1][1]);
@@ -549,8 +669,10 @@ function ecg_data_process_v1(ecgData, frequency, options) {
                     }
                 }
             }
+            let qWaveThroughValue = Math.min.apply(null, smoothLeft.slice(qWaveStartIndex, qWaveEndIndex).map((val) => val[1]));
+            qWavePeakIndex = smoothLeft.findLastIndex((val) => val[1] === qWaveThroughValue);
             options.debug && console.log('qWaveStartIndex:', qWaveStartIndex, 'qWavePeakIndex:', qWavePeakIndex, 'qWaveEndIndex:', qWaveEndIndex);
-            if (qWaveEndIndex >= 0 && qWaveStartIndex >= 0 && qWaveStartIndex < qWavePeakIndex) {
+            if (qWaveEndIndex >= 0 && qWaveStartIndex >= 0 && qWaveStartIndex <= qWavePeakIndex) {
                 beat.q.start_time = left[qWaveStartIndex][0];
                 beat.q.end_time = left[qWaveEndIndex][0];
                 beat.q._data = left.slice(qWaveStartIndex, qWaveEndIndex);
@@ -562,14 +684,16 @@ function ecg_data_process_v1(ecgData, frequency, options) {
             let rWaveStartIndex = qWaveEndIndex;
             let rWaveEndIndex = -1;
             //iterate right find r wave end
-            for (let i = 1; i < right.length; i++) {
-                if (smoothRight[i] && smoothRight[i - 1] && smoothRight[i][1] < smoothRight[i - 1][1] && smoothRight[i][1] <= baselineRight[i][1]) {
+            for (let i = 1; i < sWaveEndIndex; i++) {
+                console.log('rWaveEndIndex:', i, smoothRight[i][1], smoothRight[i - 1][1], baselineRight[i][1],threshold, baselineRight[i - 1][1],baselineWithoutQRSRight[i][1], baselineWithoutQRSRight[i - 1][1]);
+                console.log('beat',beat)
+                if (smoothRight[i] && smoothRight[i - 1] && smoothRight[i-1][1] >= smoothRight[i][1] && smoothRight[i][1] <= baselineRight[i][1]+threshold) {
                     rWaveEndIndex = i;
                     break;
                 }
             }
             options.debug && console.log('rWaveStartIndex:', rWaveStartIndex, 'rWaveEndIndex:', rWaveEndIndex);
-            if (rWaveStartIndex >= 0 && rWaveEndIndex >= 0 && rWaveEndIndex < sPeakIndex) {
+            if (rWaveStartIndex >= 0 && rWaveEndIndex >= 0 && rWaveEndIndex < sWaveEndIndex) {
                 beat.r.start_time = left[rWaveStartIndex][0];
                 beat.r.end_time = right[rWaveEndIndex][0];
                 beat.r._data = [].concat(left.slice(rWaveStartIndex), right.slice(0, rWaveEndIndex));
@@ -577,26 +701,11 @@ function ecg_data_process_v1(ecgData, frequency, options) {
 
             //get s wave
             let sWaveStartIndex = rWaveEndIndex;
-            let sWavePeakIndex = sPeakIndex;
-            let sWaveEndIndex = -1;
-            //iterate right find s wave end
-            for (let i = sWavePeakIndex; i < right.length; i++) {
-                if (smoothRight[i] && smoothRight[i - 1]) {
-                    if (smoothRight[i][1] >= smoothRight[i - 1][1]) {
-                        // console.log('sWaveStartIndex:', i, smoothRight[i][1], smoothRight[i - 1][1], 'slope:', slopeRight[i], slopeRight[i - 1]);
-                        if ((slopeRight[i] <= 0 && slopeRight[i - 1] >= 0) || (smoothRight[i][1] >= baselineRight[i][1] - threshold && smoothRight[i - 1][1] <= baselineRight[i - 1][1] - threshold)) {
-                            sWaveEndIndex = i;
-                            break;
-                        }
-                    } else {
-                        //meet peak
-                        sWaveEndIndex = i;
-                        break;
-                    }
-                }
-            }
+            let sWavePeakIndex = -1;
+            let sWaveThroughValue = Math.min.apply(null, smoothRight.slice(sWaveStartIndex, sWaveEndIndex).map((val) => val[1]));
+            sWavePeakIndex = smoothRight.findIndex((val) => val[1] === sWaveThroughValue);
             options.debug && console.log('sWaveStartIndex:', sWaveStartIndex, 'sWavePeakIndex:', sWavePeakIndex, 'sWaveEndIndex:', sWaveEndIndex);
-            if (sWaveStartIndex >= 0 && sWaveEndIndex >= 0 && sWavePeakIndex >= 0 && sWaveStartIndex < sWavePeakIndex) {
+            if (sWaveStartIndex >= 0 && sWaveEndIndex >= 0 && sWavePeakIndex >= 0 && sWaveEndIndex >= sWavePeakIndex) {
                 beat.s.start_time = right[sWaveStartIndex][0];
                 beat.s.end_time = right[sWaveEndIndex][0];
                 beat.s._data = right.slice(sWaveStartIndex, sWaveEndIndex);
@@ -606,21 +715,24 @@ function ecg_data_process_v1(ecgData, frequency, options) {
             //get t wave
             let tWaveStartIndex = -1;
             let tWavePeakIndex = null;
-            let tWaveEndIndex = -1;
+            let tWaveEndIndex = right.findIndex((val) => val[0] === beat.t.end_time);
+            if (tWaveEndIndex < 0) {
+                tWaveEndIndex = right.length - 1;
+            }
             //iterate right find t wave end
             for (let i = sWaveEndIndex; i < right.length; i++) {
-                if (smoothRight[i] && smoothRight[i - 1] && smoothRight[i][1] > smoothRight[i - 1][1] && smoothRight[i][1] >= baselineRight[i][1] + threshold) {
+                if (smoothRight[i] && smoothRight[i - 1] && smoothRight[i][1] > smoothRight[i - 1][1] && smoothRight[i][1] >= baselineWithoutQRSRight[i][1] + threshold) {
                     tWaveStartIndex = i;
                     break;
                 }
             }
-            for (let i = right.length - 1; i >= 0; i--) {
-                if (smoothRight[i] && smoothRight[i + 1] && smoothRight[i][1] > smoothRight[i + 1][1]) {
-                    tWaveEndIndex = i;
-                    break;
-                }
-            }
-            options.debug && console.log('tWaveStartIndex:', tWaveStartIndex, 'tWavePeakIndex:', tWavePeakIndex, 'tWaveEndIndex:', tWaveEndIndex, right);
+            /* for (let i = right.length - 1; i >= 0; i--) {
+                 if (smoothRight[i] && smoothRight[i + 1] && smoothRight[i][1] > smoothRight[i + 1][1]) {
+                     tWaveEndIndex = i;
+                     break;
+                 }
+             }*/
+            options.debug && console.log('tWaveStartIndex:', tWaveStartIndex, 'tWavePeakIndex:', tWavePeakIndex, 'tWaveEndIndex:', tWaveEndIndex, beat.t.end_time, smoothRight, baselineRight);
             if (tWaveStartIndex >= 0 && tWaveEndIndex >= 0 && tWaveStartIndex < tWaveEndIndex) {
                 beat.t.start_time = right[tWaveStartIndex][0];
                 beat.t.end_time = right[tWaveEndIndex][0];
@@ -718,6 +830,8 @@ function ecg_data_process_v1(ecgData, frequency, options) {
         }
         if (st.length > 0) {
             summary.st = st.reduce((a, b) => a + b) / st.length;
+        } else {
+            summary.st = null;
         }
         if (pr.length > 0) {
             summary.pr = pr.reduce((a, b) => a + b) / pr.length;
@@ -743,14 +857,16 @@ function ecg_data_process_v1(ecgData, frequency, options) {
         let stSum = 0,
             prSum = 0,
             qrsSum = 0;
-        let validBeats = 0;
+        let validBeats = 0,
+            stBeats = 0;
         for (let seg of segments) {
             if (seg.summary.hr_duration) {
                 hrSum += seg.summary.hr_duration;
                 hrBeats += seg.summary.hr_beats;
             }
-            if (seg.summary.st) {
+            if (typeof seg.summary.st === 'number') {
                 stSum += seg.summary.st * seg.summary.validBeats;
+                stBeats++;
             }
             if (seg.summary.pr) {
                 prSum += seg.summary.pr * seg.summary.validBeats;
@@ -764,9 +880,13 @@ function ecg_data_process_v1(ecgData, frequency, options) {
             summary.hr = Math.round(60 / (hrSum / 1000 / hrBeats));
         }
         if (validBeats > 0) {
-            summary.st = stSum / validBeats;
             summary.pr = prSum / validBeats;
             summary.qrs = qrsSum / validBeats;
+        }
+        if (stBeats > 0) {
+            summary.st = stSum / stBeats;
+        } else {
+            summary.st = null;
         }
         return summary;
 
@@ -784,6 +904,8 @@ function ecg_data_process_v1(ecgData, frequency, options) {
             windowSize: 20
         },
         throughMinDistance: 10,
+        minPWaveHeight: 0,
+        minTWaveHeight: 0.1,
         useDirectData: false,
     }, options || {});
     frequency = frequency || 100;
@@ -791,8 +913,8 @@ function ecg_data_process_v1(ecgData, frequency, options) {
     let aggregationRatio = options.aggregation || Math.floor(frequency / 100);
     if (!options.useDirectData) {
         ecgData = aggregation(ecgData, aggregationRatio);
+        frequency = frequency / aggregationRatio;
     }
-    frequency = frequency / aggregationRatio;
     let resultObj = new resultConstructor(ecgData, frequency, options);
     ecgData = resultObj._data;
     //splite data to segments
@@ -804,7 +926,7 @@ function ecg_data_process_v1(ecgData, frequency, options) {
         let rPeaks = getRPeaks(seg, options);
 
         //get beats
-        let beats = getBeats(rPeaks, seg, options);
+        let beats = getBeats(rPeaks, seg, frequency, options);
         //wave of beats
         updateWaves(beats, options);
         //test beats is valid
